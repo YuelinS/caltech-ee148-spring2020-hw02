@@ -9,15 +9,15 @@ from matplotlib import pyplot as plt
 split_path = '../data/hw02_splits'
 file_names_train = np.load(os.path.join(split_path,'file_names_train.npy'))
 
-flag_figs = range(len(file_names_train))  #range(20)  #
+flag_figs = range(len(file_names_train))  #range(1)  #
 
 flag_filter = range(2) # [0]  #
 
-flag_heatmap = False
+flag_heatmap = False #True #
 
 # Red light filter parameter tuning:    
 # filter shape params: (red_diameter, black_edge, blue_padding)
-filter_paras = [(5,1,0),(15,2,0)]
+filter_paras = [(5,1),(15,2)]
 filter_red = [450,350]  
 filter_blk = [-90,-100] 
 
@@ -32,7 +32,7 @@ drop_bottom = 75
 
 
 # Set this parameter to True when you're done with algorithm development:
-done_tweaking = False
+done_tweaking = True # False  #
 
 
 #%%
@@ -42,7 +42,7 @@ def normalize(patch):
     # patch_zmean = patch - np.mean(patch)
     # patch_normed = patch_zmean / np.sqrt(np.sum(np.square(patch_zmean)))
     
-    norm = max(np.amax(patch) - np.amin(patch), norm_max)
+    norm = np.amax(patch) - np.amin(patch) # max(, norm_max)
     patch_normed = (patch)/ norm  # - np.amin(patch)
                                         
     return patch_normed
@@ -241,50 +241,55 @@ os.makedirs(preds_path, exist_ok=True) # create directory if needed
 # make filter
 filters = make_red_light_filter(filter_paras)
 
+#%%
 '''
 Make predictions on the training set.
 '''
-# load annotation
-with open(os.path.join(gts_path,'annotations_train.json'),'r') as f:
-    gts = json.load(f)
+
+if not done_tweaking:
+
+    # load annotation
+    with open(os.path.join(gts_path,'annotations_train.json'),'r') as f:
+        gts = json.load(f)
     
-
-preds_train = {}
-
-for i in flag_figs:
-
-    # read image using PIL:
-    I = Image.open(os.path.join(data_path,file_names_train[i]))
-
-    pred_bboxes, top_convs, bbox_filter_idx = detect_red_light_mf(np.asarray(I),filters)   
-    preds_train[file_names_train[i]] = pred_bboxes
     
-    gt_bboxes = gts[file_names_train[i]]   
-
-    # visualization
-    img = ImageDraw.Draw(I)  #Image.fromarray(I))  
-
-    for bbox in gt_bboxes:
-        bbox = [bbox[k] for k in [1,0,3,2]]
-        img.rectangle(bbox)
-
-
-    for bbox, filter_idx in zip(pred_bboxes, bbox_filter_idx):
-        confidence = bbox[4]
-        bbox = [bbox[k] for k in [1,0,3,2]]
+    preds_train = {}
+    
+    for i in flag_figs:
+    
+        # read image using PIL:
+        I = Image.open(os.path.join(data_path,file_names_train[i]))
         
-        img.rectangle(bbox, outline = f"hsl({(filter_idx+1)*100}, 100%, 50%)")
-        img.text([bbox[0]-10,bbox[1]-10],f'{confidence:.3f}')
+        pred_bboxes, top_convs, bbox_filter_idx = detect_red_light_mf(np.asarray(I),filters)   
+        preds_train[file_names_train[i]] = pred_bboxes
         
-    # I.show()
-    I.save(os.path.join(preds_path,file_names_train[i]))
+        gt_bboxes = gts[file_names_train[i]]   
+        
+        # visualization
+        img = ImageDraw.Draw(I)  #Image.fromarray(I))  
+        
+        for bbox in gt_bboxes:
+            bbox = [bbox[k] for k in [1,0,3,2]]
+            img.rectangle(bbox)
+        
+        
+        for bbox, filter_idx in zip(pred_bboxes, bbox_filter_idx):
+            confidence = bbox[4]
+            bbox = [bbox[k] for k in [1,0,3,2]]
+            
+            img.rectangle(bbox, outline = f"hsl({(filter_idx+1)*100}, 100%, 50%)")
+            img.text([bbox[0]-10,bbox[1]-10],f'{confidence:.3f}')
+            
+        # I.show()
+        I.save(os.path.join(preds_path,file_names_train[i]))
     
     
-# save preds (overwrites any previous predictions!)
-with open(os.path.join(preds_path,'preds_train.json'),'w') as f:
-    json.dump(preds_train,f)
+    # save preds (overwrites any previous predictions!)
+    with open(os.path.join(preds_path,'preds_train.json'),'w') as f:
+        json.dump(preds_train,f)
 
 
+#%%
 '''
 Make predictions on the test set. 
 '''
@@ -301,7 +306,7 @@ if done_tweaking:
     for i in range(len(file_names_test)):
 
         I = Image.open(os.path.join(data_path,file_names_test[i]))
-        preds_test[file_names_test[i]], _, _ = detect_red_light_mf(np.asarray(I))
+        preds_test[file_names_test[i]], _, _ = detect_red_light_mf(np.asarray(I),filters)
 
     # save preds (overwrites any previous predictions!)
     with open(os.path.join(preds_path,'preds_test.json'),'w') as f:

@@ -7,9 +7,9 @@ from PIL import Image, ImageDraw
 
 
 # Set this parameter to True when you're done with algorithm development:
-done_tweaking = False
+done_tweaking = True # False #
 
-flag_iou = [0.25]   # [0.25, 0.5, 0.75] #
+flag_iou = [0.25, 0.5, 0.75]  #[0.25]   # 
 
 
 def compute_iou(box1, box2):
@@ -153,69 +153,72 @@ file_names_train = np.load(os.path.join(split_path,'file_names_train.npy'))
 file_names_test = np.load(os.path.join(split_path,'file_names_test.npy'))
 
 
-
 '''
 Load training data. 
 '''
-with open(os.path.join(preds_path,'preds_train.json'),'r') as f:
-    preds_train = json.load(f)
+
+if not done_tweaking:
+
+    with open(os.path.join(preds_path,'preds_train.json'),'r') as f:
+        preds_train = json.load(f)
+        
+    with open(os.path.join(gts_path, 'annotations_train.json'),'r') as f:
+        gts_train = json.load(f)
     
-with open(os.path.join(gts_path, 'annotations_train.json'),'r') as f:
-    gts_train = json.load(f)
+
+    # For a fixed IoU threshold, vary the confidence thresholds.
+    # training set for the three IoU threshold. 
+    
+    confidence_thrs = np.sort(np.array([item[4] for fname in preds_train for item in preds_train[fname] if len(preds_train[fname])>0],dtype=float)) # using (ascending) list of confidence scores as thresholds
+    tp_train = np.zeros(len(confidence_thrs))
+    tp_fp_train = np.zeros(len(confidence_thrs))
+    tp_fn_train = np.zeros(len(confidence_thrs))
+    
+    # Plot training set PR curves
+    # fig,ax = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
+    
+    for j, iou_thr in enumerate(flag_iou):
+        
+        for i, conf_thr in enumerate(confidence_thrs):
+            tp_train[i], tp_fp_train[i], tp_fn_train[i] = compute_counts(preds_train, gts_train, iou_thr=iou_thr, conf_thr=conf_thr)
+    
+        plt.plot(tp_train/tp_fn_train, tp_train/tp_fp_train,label = f'IoU threshold {iou_thr}')
+        
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Training set')    
+    plt.legend()
+    plt.savefig(os.path.join(preds_path,'PR_curve_train.png'))
+
+
+#%%
 
 if done_tweaking:
     
     '''
     Load test data.
-    '''
-    
+    '''    
     with open(os.path.join(preds_path,'preds_test.json'),'r') as f:
         preds_test = json.load(f)
         
     with open(os.path.join(gts_path, 'annotations_test.json'),'r') as f:
         gts_test = json.load(f)
-
-
-#%%
-# For a fixed IoU threshold, vary the confidence thresholds.
-# training set for the three IoU threshold. 
-
-confidence_thrs = np.sort(np.array([item[4] for fname in preds_train for item in preds_train[fname] if len(preds_train[fname])>0],dtype=float)) # using (ascending) list of confidence scores as thresholds
-tp_train = np.zeros(len(confidence_thrs))
-tp_fp_train = np.zeros(len(confidence_thrs))
-tp_fn_train = np.zeros(len(confidence_thrs))
-
-# Plot training set PR curves
-fig,ax = plt.subplots(nrows=1, ncols=3, figsize=(15, 4))
-
-for j, iou_thr in enumerate(flag_iou):
     
-    for i, conf_thr in enumerate(confidence_thrs):
-        tp_train[i], tp_fp_train[i], tp_fn_train[i] = compute_counts(preds_train, gts_train, iou_thr=iou_thr, conf_thr=conf_thr)
+    tp_test = np.zeros(len(confidence_thrs))
+    tp_fp_test = np.zeros(len(confidence_thrs))
+    tp_fn_test = np.zeros(len(confidence_thrs))
 
-
-    ax[j].plot(tp_train/tp_fn_train, tp_train/tp_fp_train)
-    ax[j].set_xlabel('Recall')
-    ax[j].set_ylabel('Precision')
-    ax[j].set_title(f'IoU threshold: {iou_thr}')
-
-plt.savefig(os.path.join(preds_path,'PR_curve_train.png'))
-
-
-# plotting test set PR curves
-if done_tweaking:
-    
-    fig,ax = plt.subplots(nrows=1, ncols=3, figsize=(15, 4))
-    
     for j, iou_thr in enumerate(flag_iou):    
         
         for i, conf_thr in enumerate(confidence_thrs):
-            tp_train[i], tp_fp_train[i], tp_fn_train[i] = compute_counts(preds_train, gts_train, iou_thr=iou_thr, conf_thr=conf_thr)
+            tp_test[i], tp_fp_test[i], tp_fn_test[i] = compute_counts(preds_test, gts_test, iou_thr=iou_thr, conf_thr=conf_thr)
             
-            ax[j].plot(tp_train/tp_fn_train, tp_train/tp_fp_train)
-            ax[j].set_xlabel('Recall')
-            ax[j].set_ylabel('Precision')
-            ax[j].set_title(f'IoU threshold: {iou_thr}')
+        plt.plot(tp_test/tp_fn_test, tp_test/tp_fp_test,label = f'IoU threshold {iou_thr}')
+            
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.legend()
+    plt.title('Test set')
 
     plt.savefig(os.path.join(preds_path,'PR_curve_test.png'))
     
